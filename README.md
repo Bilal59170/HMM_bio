@@ -1,2 +1,1 @@
-# HMM_bio
-Group project on Sequential Monte Carlo course: Particle Filters for genomics.
+Project about Sequential Monte Carlo algorithm applied to genomics.
