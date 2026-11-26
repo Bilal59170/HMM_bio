@@ -1,0 +1,52 @@
+# Name of the Conda environment + some explanations
+name: M2DS_SMC_env         
+
+channels:
+  - conda-forge
+
+dependencies:
+  # Python
+  - python=3.12
+  # Lib of Lila
+  # - pysam
+  # Installing pip
+  - pip
+
+  - pip:
+  # Deep learning 
+    - torch                # PyTorch. Important to install it with pip and not conda
+    - torchvision          # Datasets & image utilities (e.g. MNIST)
+
+    # Core scientific stack
+    # - numpy
+    - scipy
+    # - pandas
+
+    # Visualization
+    # - matplotlib
+    - seaborn
+
+    # Classical machine learning
+    - scikit-learn
+    - statsmodels
+
+    # Jupyter
+    - jupyter
+    - jupyterlab
+    - ipykernel
+
+    # Utilities
+    - joblib
+    - tqdm
+    - pyyaml
+
+    # Paper requirements
+    - pandas
+    - msprime
+    - numpy
+    - matplotlib
+    - Sphinx
+    - numpydoc
+    - sphinx_rtd_theme
+    - pytest
+    - tskit

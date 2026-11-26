@@ -2,7 +2,7 @@
 
 - [SMC Project: Make things more clear](#smc-project-make-things-more-clear)
   - [Understanding the sequential coalescent with recombination model](#understanding-the-sequential-coalescent-with-recombination-model)
-    - [Position of the problem](#position-of-the-problem)
+    - [Vocabulary \& Position of the problem](#vocabulary--position-of-the-problem)
     - [Observations (y\_j)\_j: present-day DNA variants](#observations-y_j_j-present-day-dna-variants)
     - [Latent variable x, sequence of tree (and more)](#latent-variable-x-sequence-of-tree-and-more)
     - [Recombination](#recombination)
@@ -17,15 +17,28 @@
       - [What x and x\_s are (Appendix)](#what-x-and-x_s-are-appendix)
       - [Joint model](#joint-model)
   - [The smoothing problem](#the-smoothing-problem)
+  - [Filters: course \& qualitative explanation](#filters-course--qualitative-explanation)
+    - [Typical algorithm, FK, and Filters](#typical-algorithm-fk-and-filters)
+    - [Expression of G\_t, choice of M\_t](#expression-of-g_t-choice-of-m_t)
+    - [Bootstrap vs Guided (qualitative)](#bootstrap-vs-guided-qualitative)
+  - ["Methods" section of the paper](#methods-section-of-the-paper)
+    - [Particle filter (algo 1)](#particle-filter-algo-1)
+    - [CMJP (algo 2)](#cmjp-algo-2)
+    - [Choice of waypoints (empty)](#choice-of-waypoints-empty)
+    - [Lokkahead likelihood (empty)](#lokkahead-likelihood-empty)
+    - [EM and Variationnal Bayes for MLE (empty)](#em-and-variationnal-bayes-for-mle-empty)
+  - [Other parts](#other-parts)
 
 
 ## Understanding the sequential coalescent with recombination model
 
-### Position of the problem
+### Vocabulary & Position of the problem
+We would like to construct genealogical trees froms DNA sequences. 
+
 - **DNA is a sequence of bases**—A, C, G and T. At a given position (*locus*), different chromosome copies may carry different bases. These alternatives are called **alleles**.
 - Each person has **two copies of each autosomal chromosome**, one inherited from each parent. Thus, four diploid individuals provide **$S=8$ haploid sequences** (chromosome copies).
 - We compare these copies at the **same genomic position**, not at different dates. We observe present-day alleles, **not the ancient mutation events directly**.
-The observations are represented as
+
 
 ### Observations (y_j)_j: present-day DNA variants
 
@@ -365,3 +378,131 @@ Smoothing estimates $p(X_u | Y_{0:s})$ for $u < s$ at (biological) time $s.$ The
 | Observation $Y_t$: sensor reading                                                                          | Observation $Y_s$: genetic data at that position                              |
 | Motion model                                                                                               | Model of how recombination changes the genealogy                              |
 | Smoothing at time $t$: recover the whole trajectory of the robot $X_{0:t}$ observing the sensors $Y_{0:t}$ | Smoothing at time $s$: recover all the tree up until the genome of index $s$. |
+
+## Filters: course & qualitative explanation
+### Typical algorithm, FK, and Filters
+Typical algorithm: 
+$$
+\begin{array}{rl}
+\hline
+& \textbf{Algorithm 1:} \text{Generic PF algorithm} \\
+& \text{Operations involving index } n \text{ must be performed} \\
+& \text{for } n=1,\ldots,N. \\
+\hline
+1: & X_0^n\sim \mathbb{M}_0(dx_0) \\
+2: & w_0^n\gets G_0(X_0^n) \\
+3: & W_0^n\gets w_0^n\big/\sum_{m=1}^{N}w_0^m \\
+4: & \textbf{for } t=1 \textbf{ to } T \textbf{ do} \\
+5: & \quad A_t^{1:N}\sim\operatorname{resample}(W_{t-1}^{1:N}) \\
+6: & \quad X_t^n\sim M_t(X_{t-1}^{A_t^n},dx_t) \\
+7: & \quad w_t^n\gets G_t(X_{t-1}^{A_t^n},X_t^n) \\
+8: & \quad W_t^n\gets w_t^n\big/\sum_{m=1}^{N}w_t^m \\
+9: & \textbf{end for} \\
+\hline
+\end{array}
+$$
+
+The algorithm depends on four type of quantities: $\mathbb{M}_0, M_t, G_t, G_0.$ $\mathbb{M}_0, M_t$ are chosen by the user, while $G_t, G_0$ are determined by the Feynman-Kac model (cf some detail below)
+FK Bootstrap model:
+$$
+\begin{align*}
+  \mathbb{M}_0 &= \mathbb{P}_0, \quad M_t(x_{t-1}, dx_t) = P_t(x_{t-1}, dx_t), \\
+  G_t(x_{t-1}, x_t) &= f_t(y_t | x_t), \quad G_0(x_0) = f_0(y_0 | x_0)
+\end{align*}
+$$
+FK guided model:
+$$
+\begin{align*}
+  \mathbb{M}_0(dx_0)G_0(x_0) &= \mathbb{P}_0(dx_0)f_0(y_0 | x_0), \\
+  M_t(x_{t-1}, dx_t)G_t(x_{t-1}, x_t) &= P_t(x_{t-1}, dx_t)f_t(y_t | x_t).
+\end{align*}
+$$
+
+### Expression of G_t, choice of M_t
+You aren't supposed to work out all four. The system is underdetermined on purpose, and the free choice is exactly what the guided filter lets you design.
+
+1. **You choose the proposals** $\mathbb{M}_0$ and $M_t$. These are design choices.
+2. **The potentials then follow** from the two equations:
+$$
+G_0(x_0) = f_0(y_0\mid x_0)\,\frac{d\mathbb{P}_0}{d\mathbb{M}_0}(x_0),
+\qquad
+G_t(x_{t-1},x_t) = f_t(y_t\mid x_t)\,\frac{dP_t(x_{t-1},\cdot)}{dM_t(x_{t-1},\cdot)}(x_t).
+$$
+With densities, these become $G_0 = f_0\, \dfrac{p_0}{m_0}$ and $G_t = f_t\, \dfrac{p_t(x_t\mid x_{t-1})}{m_t(x_t\mid x_{t-1})}$.
+
+The two equations only make sure that $\mathbb{M}_t \prod G_s = \mathbb{P}_t \prod f_s$. That means every valid choice targets **the same** $\mathbb{Q}_t$ and the same $L_t = p(y_{0:t})$. The choice changes the variance of the estimates, not what is being estimated.
+
+**Requirements on the choice of $M_t$**
+- **Support:** $M_t(x_{t-1},\cdot)$ must give positive probability wherever $P_t(x_{t-1},dx_t)f_t(y_t\mid x_t)$ does. Otherwise the Radon–Nikodym derivative doesn't exist.
+- **Practical:** you need to be able to **sample** from $M_t$ and **evaluate** $G_t$ pointwise.
+
+**Some possible choices**
+
+| Choice of $M_t$ | Resulting $G_t$ |
+|---|---|
+| $P_t$ | $f_t(y_t\mid x_t)$: the **bootstrap** filter, a special case of guided |
+| $\propto P_t(x_{t-1},dx_t)\,f_t(y_t\mid x_t)$ (optimal) | $p(y_t\mid x_{t-1})$, which doesn't depend on $x_t$ |
+| An approximation of the optimal one (e.g. from a Gaussian or linearised model) | $f_t \cdot p_t/m_t$ |
+
+So the bootstrap filter is just one solution of the guided equations, the one where you pick $M_t = P_t$.
+
+### Bootstrap vs Guided (qualitative)
+The two filters differ in **when the observation $y_t$ is used**:
+- The **bootstrap** filter moves particles first and only uses $y_t$ afterwards, to score them.
+- The **guided** filter uses $y_t$ while it moves them.
+
+**Bootstrap: move blindly, then judge**
+
+- **Move:** $X_t^n \sim P_t(X_{t-1}^{A_t^n}, dx_t)$. Particles follow the prior dynamics and ignore $y_t$.
+- **Weight:** $G_t = f_t(y_t \mid X_t^n)$. Afterwards, each particle is scored by how well it explains $y_t$.
+
+It's like shooting with your eyes closed and then checking which shots hit the target.
+
+**When it fails:** when $f_t(y_t\mid \cdot)$ is much more **concentrated** than $P_t(x_{t-1},\cdot)$. That happens when the observation is very informative or the dynamics are very noisy. Then:
+- most particles land where $f_t$ is nearly zero, so their weights are close to 0;
+- a handful of particles carry almost all the weight, so the ESS collapses;
+- after resampling, you end up with many copies of the same few particles, so the approximation of $\mathbb{Q}_t$ is poor.
+
+The same failure happens when $y_t$ is an **outlier** with respect to the prior: almost no particle lands near it.
+
+**Guided: aim using $y_t$, then correct**
+
+- **Move:** $X_t^n \sim M_t(X_{t-1}^{A_t^n}, dx_t)$, where $M_t$ already takes $y_t$ into account. It aims at the region where $P_t f_t$ is large.
+- **Weight:** $G_t = f_t \cdot \dfrac{dP_t}{dM_t}$. This corrects for the fact that particles were not drawn from $P_t$.
+
+Because particles are already placed in the right region, the potentials $G_t$ are much **flatter** across particles. Flat weights mean a high ESS, less resampling, and more diversity among particles.
+
+**The ideal case** is the optimal proposal $M_t(x_{t-1},dx_t) \propto P_t(x_{t-1},dx_t)\, f_t(y_t\mid x_t)$. Then $G_t(x_{t-1},x_t) = p(y_t \mid x_{t-1})$ no longer depends on the new $X_t$. The move step adds no weight variance at all.
+
+**Why bootstrap could be interesting**
+
+The bootstrap filter isn't simply worse. It has real advantages:
+- **Simplicity:** you only need to **simulate** from $P_t$, not evaluate its density.
+- **No design choice:** you don't have to build an $M_t$, and a poorly chosen $M_t$ can be *worse* than $P_t$, especially if its tails are lighter.
+- **It works well when each $y_t$ is weakly informative** compared with the dynamics.
+
+The last point applies to your paper. Each mutation carries little information about the tree, so the bootstrap-style approach is reasonable step by step. The real problem there is that the relevant information is spread **far ahead** along the genome. That's why the authors don't build a guided proposal: they add a lookahead, which corresponds to the auxiliary FK model in your notes.
+
+## "Methods" section of the paper
+### Particle filter (algo 1)
+
+### CMJP (algo 2)
+### Choice of waypoints (empty) 
+### Lokkahead likelihood (empty)
+### EM and Variationnal Bayes for MLE (empty)
+## Other parts 
+
+- "Particle filters": Algo of smoothing for discrete process
+- "Continuous time & space Markov process": Adaptation of the algo to continuous time. 
+	- Use of the RN theorem
+	- Choice of the waypoints is important. Not necessarily the one observed.
+- "Lookahead likelihood": For less variance, consider a kind of Auxiliary Particle Filter. 
+	- Uses future information: $\tilde{p}(y_{i+1}|x_i)$
+	- Uses a simplified likelihood of the observations $y$ knowing $x.$ See Apendix for details
+- Choosing waypoints 
+	- strategy to avoid having the $ESS$ to be too low. 
+- Figure 1: ?? 
+- Parameters inference :
+	- $\pi_x(x)$ is seen as a continuous Markov Jump process of parameter $\theta.$
+	- $\theta$ can be written as a fraction of 2 $\mathbb{E}.$ This quantity can be approximated by an EM algorithm. 
+	- An improvement (in which sense?) can be made with a Variation Bayes method, where $\theta_{VB}$ is sampled from a $\Gamma$ law. 
